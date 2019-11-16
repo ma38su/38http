@@ -8,7 +8,6 @@ import java.io.PrintStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.UnknownHostException;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -25,7 +24,6 @@ public class HttpServer implements Closeable {
     private ServerSocket serverSocket;
     private Executor executor = Executors.newCachedThreadPool();
 
-    private static final Pattern HEADER_KEYVALUE_PATTERN = Pattern.compile("(?<key>\\S+)\\:\\s*(?<value>\\S.*)");
     private static final Pattern REQUEST_PATTERN = Pattern.compile("(?<method>\\S+)\\s+(?<uri>\\S+)\\s+(?<version>\\S+)");
 
     public void open(int port) throws UnknownHostException, IOException {
@@ -56,7 +54,7 @@ public class HttpServer implements Closeable {
             String requestUri = matcher.group("uri");
             String httpVersion = matcher.group("version");
             
-            var headers = parseHeaders(in);
+            var headers = HttpUtils.parseHeaders(in);
 
             System.out.println("from: "+ socket.getRemoteSocketAddress() + ": "+ line);
             System.out.println("method: "+ method);
@@ -91,26 +89,6 @@ public class HttpServer implements Closeable {
         }
     }
 
-    private static Map<String, String> parseHeaders(BufferedReader in) throws IOException {
-        var headers = new HashMap<String, String>();
-
-        String line;
-        while ((line = in.readLine()) != null) {
-            if ("".equals(line)) {
-                break;
-            }
-            var matcher = HEADER_KEYVALUE_PATTERN.matcher(line);
-            if (!matcher.matches()) {
-                throw new IllegalStateException("Illegal header: "+ line);
-            }
-            String key = matcher.group("key");
-            String value = matcher.group("value");
-            System.out.println("header: "+ key + ": "+ value);
-            headers.put(key, value);
-        }
-        return headers;
-    }
-    
     private static void processForPost(BufferedReader in, Map<String, String> headers) throws IOException {
         int contentLength = Integer.parseInt(headers.get("Content-Length"));
         String contentType = headers.get("Content-Type");
@@ -135,6 +113,14 @@ public class HttpServer implements Closeable {
         } else {
             uri = requestUri;
         }
+    }
+    
+    public int getContentLength(Map<String, String> headers) {
+        String value = headers.get("Content-Length");
+        if (value == null) {
+            return -1;
+        }
+        return Integer.parseInt(value);
     }
 
     private static void transferFile(PrintStream out, String resoucePath) throws IOException {
